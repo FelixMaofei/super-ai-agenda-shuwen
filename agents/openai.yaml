@@ -1,0 +1,7 @@
+interface:
+  display_name: "Super AI Lab 会单 · 舒文版"
+  short_description: "已验证的舒文版：主题插画与准确排字分离，保留固定栏并自动增加流程高度"
+  brand_color: "#004165"
+  default_prompt: "使用 $super-ai-agenda-shuwen，把下面的 Super AI Lab 本期角色接龙做成舒文版会单，先确认完整文字再出图。"
+policy:
+  allow_implicit_invocation: true

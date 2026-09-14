@@ -1,0 +1,23 @@
+# Local outputs and Python caches
+.test-output/
+__pycache__/
+*.pyc
+.DS_Store
+dist/
+90-制作过程/
+
+# Historical partner experiments retained locally, outside this repository
+docs/
+assets/v009/*
+!assets/v009/logo.png
+references/super-ai-lab-v009.md
+scripts/v009_template.py
+
+# Ship the maintained Shuwen verification suite and its two fixtures
+tests/*
+!tests/test_shuwen.py
+examples/*
+!examples/shuwen-meeting.fixture.json
+!examples/mingyuan-ai-lab/
+examples/mingyuan-ai-lab/*
+!examples/mingyuan-ai-lab/meeting.json

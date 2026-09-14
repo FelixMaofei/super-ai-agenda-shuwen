@@ -1,0 +1,10 @@
+{
+  "based_on": "mingyuan-toastmasters-agenda-final.zip",
+  "source_sha256": "efa899cb6b04efc165902fc782a0b61050bf12c205c20e87cba6fd8633fdb12b",
+  "fork_name": "舒文版",
+  "fork_date": "2026-09-14",
+  "scope": "Super AI Lab 本地试用，保留现用版本",
+  "local_status": "第246期满意效果及串场规则已整理为舒文版默认；最终采用图保留不动",
+  "validation": "9项针对性检查通过；Skill格式有效；满意版参考与最终采用原图字节一致",
+  "approved_reference_sha256": "de8dc9f6f86a8ac7c634f750065be704c5625800a39c75e8b45129524b3b97d6"
+}

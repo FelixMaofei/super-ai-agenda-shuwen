@@ -1,0 +1,118 @@
+{
+  "club": {
+    "name": "Super AI Lab头马俱乐部",
+    "default_location": "程序测试会议室",
+    "language": "zh",
+    "support_components": []
+  },
+  "meeting": {
+    "number": "测试",
+    "date": "2026-09-16",
+    "start": "19:30",
+    "end": "21:30",
+    "location": "程序测试会议室",
+    "theme": "表达与成长",
+    "word_of_day": "练习",
+    "manager": "测试经理",
+    "president": "测试会长",
+    "support_components": []
+  },
+  "roles": [
+    {
+      "id": "rules_host",
+      "person": null
+    },
+    {
+      "id": "timer",
+      "person": null
+    },
+    {
+      "id": "ah_counter",
+      "person": "测试角色2"
+    },
+    {
+      "id": "grammarian",
+      "person": null
+    },
+    {
+      "id": "toastmaster",
+      "person": "测试角色4"
+    },
+    {
+      "id": "guest_host",
+      "person": "测试角色5"
+    },
+    {
+      "id": "sharing_host",
+      "person": null
+    },
+    {
+      "id": "awards_host",
+      "person": null
+    },
+    {
+      "id": "general_evaluator",
+      "person": null
+    }
+  ],
+  "prepared_speeches": [
+    {
+      "speaker": "测试演讲者0",
+      "title": null,
+      "project": "破冰演讲",
+      "minutes": 6,
+      "evaluator": "测试点评者0",
+      "evaluation_minutes": 3
+    },
+    {
+      "speaker": "测试演讲者1",
+      "title": "测试演讲题目",
+      "project": "PI L1-3",
+      "minutes": 7,
+      "evaluator": null,
+      "evaluation_minutes": 3
+    }
+  ],
+  "impromptu": {
+    "host": "测试即兴主持",
+    "minutes": 18,
+    "evaluator": null,
+    "evaluation_minutes": 7
+  },
+  "backstage": [
+    {
+      "id": "photographer",
+      "person": null,
+      "label": "拍照"
+    },
+    {
+      "id": "slides",
+      "person": "测试幕后1",
+      "label": "场控（PPT）"
+    },
+    {
+      "id": "voting",
+      "person": "测试幕后2",
+      "label": "投票链接修改"
+    }
+  ],
+  "standard_overrides": [],
+  "agenda_overrides": [
+    {
+      "id": "photo_break",
+      "minutes": 10
+    },
+    {
+      "id": "sharing",
+      "minutes": 10
+    },
+    {
+      "id": "awards",
+      "minutes": 2
+    },
+    {
+      "id": "president_closing",
+      "minutes": 1
+    }
+  ]
+}
