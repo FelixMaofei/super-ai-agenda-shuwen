@@ -42,7 +42,9 @@ python3 "$SKILL_DIR/scripts/confirm_shuwen.py" meeting.json --output-dir "$MEETI
 
 **用户确认本期文字后：**
 
-1. 使用当前环境的生图能力生成一张无字主题横幅，约 2600:932。参考 [模板说明](references/complete-template.md)。只生成插画，不让生图工具绘制表格、Logo、姓名或二维码。
+顶部品牌、期数及主题的字体、字号、颜色和基线已定型；主题不超过7字且单行时，字号最高约224px，并按描边后的实际字宽避免溢出；具体风格与描边见[完整模板](references/complete-template.md)。
+
+1. 主题标题去除空白后超过7个字，必须恰好分成两行；不得从第7字机械切开，也不得因单行能塞进版面而保持一行。先读懂标题，在语义完整的短语/分句间断开，尽量让两行字数差不多，第二行不少于2个字。标题有逗号时，优先将逗号后的文字整段放第二行，逗号留在第一行。把最终两行写入 `meeting.title_lines`；模板会校验两行和第二行最少字数，未提供有效语义断行会报错，不会自动按版宽乱断。使用当前环境的生图能力生成一张无字主题横幅，约 2600:932。按 [模板说明](references/complete-template.md) 保留左侧排字留白，人物与主题道具放在右侧。只生成插画，不让生图工具绘制表格、Logo、姓名或二维码。
 2. 使用刚确认的事实文件生成图片：
 
 ```bash
@@ -51,7 +53,9 @@ python3 "$SKILL_DIR/scripts/complete_template.py" render "$MEETING_DIR/agenda.co
   --output-dir "$MEETING_DIR"
 ```
 
-明确有会议亮点时增加 `--highlight "本期亮点"`。需要指定字体时可分别传 `--font`、`--brand-font`、`--title-font`。Python 需要 Pillow；缺失时使用环境中已有的可用 Python，或安装到独立环境，不改系统 Python。
+明确有会议亮点时增加 `--highlight "本期亮点"`；需要强调主题标题中的特定词时增加 `--title-accent "关键词"`。需要指定字体时可分别传 `--font`、`--brand-font`、`--title-font`。Python 需要 Pillow；缺失时使用环境中已有的可用 Python，或安装到独立环境，不改系统 Python。
+
+每期交付文件按期数命名：成品会单为 `SAL会单第{期数}期.png`，顶部无字主视觉为 `SAL会单主图第{期数}期.png`。渲染器仍保留 `agenda.png` 作为兼容副本；对用户优先提供带期数的 SAL 文件名。
 
 生成器只读取已确认的时间结果并核对连续性，不改变人物、时长和顺序。串场只计入时间计算，不在会单中单独列行，也不添加串场文字或注释；保留各正式环节已计算的开始时间，不丢弃或重复计算串场分钟数。时长批准延长时，日期条展示实际结束时间。
 

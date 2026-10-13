@@ -20,6 +20,32 @@ NAVY = '#073650'
 PHASES = {'opening': 'opening', 'first_half': 'upper', 'second_half': 'lower', 'closing': 'lower'}
 
 
+def semantic_title(meeting):
+    title = str(meeting['theme'])
+    visible = ''.join(title.split())
+    supplied = meeting.get('title_lines')
+    if supplied:
+        lines = [str(line).strip() for line in supplied]
+    elif '\n' in title:
+        lines = [line.strip() for line in title.splitlines()]
+    elif len(visible) > 7:
+        lines = []
+        for mark in ('，', '：', '；', '。', '？', '！', ',', ':', ';'):
+            if mark in title:
+                left, right = title.split(mark, 1)
+                if left.strip() and len(''.join(right.split())) >= 2:
+                    lines = [left.rstrip() + mark, right.lstrip()]
+                    break
+        if not lines:
+            raise ValueError('主题超过7字，请按语义提供 meeting.title_lines 两行；第二行至少2字')
+    else:
+        lines = [title]
+    lines = [line for line in lines if line]
+    if len(visible) > 7 and (len(lines) != 2 or len(''.join(lines[1].split())) < 2):
+        raise ValueError('超过7字的主题必须语义断成两行，且第二行不少于2字')
+    return '\n'.join(lines)
+
+
 def resolve_font(given=None, *, bold=False):
     if given:
         path = Path(given).expanduser()
@@ -99,14 +125,24 @@ def facts(data):
             'computed': meta, 'time_closed': True, 'source_schema': 3}
 
 
-def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, highlight='', reference_header=False):
+def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, highlight='', reference_header=False, title_accent=''):
     result = facts(data)
     source = Image.open(SOURCE).convert('RGB')
-    if source.size != (2600, 3700):
-        raise ValueError('完整模板须为 2600×3700')
+    if source.width != 2600 or source.height < 3700:
+        raise ValueError('完整模板宽度须为 2600px，且高度至少为 3700px')
+    base_height = source.height
     fontfile = resolve_font(fontfile)
     brand_font = resolve_font(brand_font or fontfile, bold=True)
-    title_font = resolve_font(title_font or brand_font, bold=True)
+    if not title_font:
+        display_candidate = Path.home() / 'Library/Fonts/Alimama_ShuHeiTi_Bold.ttf'
+        heavy_candidates = [
+            Path.home() / 'Library/Fonts/NotoSansCJK-Black-7.otf',
+            Path.home() / 'Library/Fonts/NotoSansCJK-Black.otf',
+            Path('/System/Library/Fonts/Supplemental/NotoSansCJK-Black.otf'),
+        ]
+        heavy_fallback = next((path for path in heavy_candidates if path.is_file()), None)
+        title_font = str(display_candidate) if display_candidate.is_file() else (str(heavy_fallback) if heavy_fallback else brand_font)
+    title_font = resolve_font(title_font, bold=True)
     body = ImageFont.truetype(fontfile, 52)
     measure = ImageDraw.Draw(source)
 
@@ -150,10 +186,10 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
     backstage_text = wrap(' ｜ '.join(backstage) or '待定', 2175, backstage_font)
     backstage_extra = max(0, text_height(backstage_text, backstage_font) + 24 - 74)
     footer_shift = delta + backstage_extra
-    image = Image.new('RGB', (2600, 3700 + footer_shift), NAVY)
+    image = Image.new('RGB', (2600, base_height + footer_shift), NAVY)
     image.paste(source.crop((0, 0, 2600, 3095)), (0, 0))
     image.paste(source.crop((0, 3095, 2600, 3195)), (0, 3095 + delta))
-    image.paste(source.crop((0, 3195, 2600, 3700)), (0, 3195 + footer_shift))
+    image.paste(source.crop((0, 3195, 2600, base_height)), (0, 3195 + footer_shift))
     draw = ImageDraw.Draw(image)
 
     def text(value, box, size=52, fill='#111111', center=False, bold=False, typeface=None):
@@ -174,18 +210,55 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
             raise ValueError('请提供本期无字主题插画 --hero')
         image.paste(ImageOps.fit(Image.open(hero).convert('RGB'), (2600, 932)), (0, 0))
         logo = Image.open(ROOT / 'assets/v009/logo.png').convert('RGBA')
-        logo.thumbnail((389, 321))
-        image.paste(logo, (66, 88), logo)
-        text('Super AI Lab', (477, 80, 1630, 205), 106, NAVY, bold=True, typeface=brand_font)
-        text('头马俱乐部', (477, 215, 1510, 309), 78, NAVY, bold=True, typeface=brand_font)
-        text('第' + str(m['number']) + '期例会', (477, 330, 1590, 425), 74, '#772432', bold=True, typeface=brand_font)
-        theme = str(m['theme'])
-        theme_size = 190
+        logo.thumbnail((300, 248))
+        image.paste(logo, (66, 300-logo.height), logo)
+        headline_font = ImageFont.truetype(brand_font, 100)
+        cn_font = ImageFont.truetype(brand_font, 77)
+        brand_x, baseline = 420, 180
+        english = str(m.get('club_heading', 'Super AI Lab'))
+        chinese = str(m.get('club_subheading', '头马俱乐部'))
+        cn_box = draw.textbbox((0, 0), chinese, font=cn_font)
+        # Anchor on the uppercase S glyph bbox, never the lowercase p descender.
+        cap_box = draw.textbbox((0, 0), 'S', font=headline_font)
+        english_y = baseline-cap_box[3]
+        draw.text((brand_x, english_y), english, font=headline_font, fill=NAVY)
+        chinese_y = baseline-cn_box[3]
+        draw.text((brand_x+draw.textlength(english, font=headline_font), chinese_y), chinese, font=cn_font, fill=NAVY)
+        issue = '第' + str(m['number']) + '期例会'
+        issue_font = ImageFont.truetype(brand_font, 74)
+        issue_box = draw.textbbox((0, 0), issue, font=issue_font)
+        draw.text((brand_x, 300-issue_box[3]), issue, font=issue_font, fill='#772432')
+        theme = semantic_title(m)
+        visible_theme = ''.join(theme.split())
+        is_short_single = len(visible_theme) <= 7 and '\n' not in theme
+        theme_size = 224 if is_short_single else (166 if '\n' in theme else 204)
         theme_face = ImageFont.truetype(title_font, theme_size)
-        if draw.textlength(theme, font=theme_face) > 1685 or '\n' in theme:
-            theme_size = 140
-            theme = wrap(theme, 1685, ImageFont.truetype(title_font, theme_size))
-        text(theme, (90, 468, 1775, 780), theme_size, NAVY, bold=True, typeface=title_font)
+        theme_width = draw.textbbox((0, 0), theme.replace('\n', ''), font=theme_face, stroke_width=6)[2]
+        if is_short_single and theme_width > 1685:
+            theme_size = max(204, int(theme_size * 1685 / theme_width))
+            theme_face = ImageFont.truetype(title_font, theme_size)
+            theme_width = draw.textbbox((0, 0), theme, font=theme_face, stroke_width=6)[2]
+        if theme_width > 1685 or '\n' in theme:
+            theme_size = 166
+            theme_face = ImageFont.truetype(title_font, theme_size)
+            if '\n' not in theme:
+                theme = wrap(theme, 1685, theme_face)
+        lines = theme.split('\n')
+        line_boxes = [draw.textbbox((0, 0), line, font=theme_face, stroke_width=6) for line in lines]
+        line_gap = 5
+        block_height = sum(box[3] - box[1] for box in line_boxes) + line_gap * (len(lines) - 1)
+        title_y = 330 + (800 - 330 - block_height) / 2
+        accent = title_accent or str(m.get('title_accent') or '')
+        if not accent:
+            accent = next((candidate for candidate in ('AI Skill', '小爱好', 'AI') if candidate in theme), '')
+        for line, bounds in zip(lines, line_boxes):
+            origin_y = title_y - bounds[1]
+            draw.text((90, origin_y), line, font=theme_face, fill=NAVY, stroke_width=6, stroke_fill='#fff7e6')
+            if accent and accent in line:
+                prefix, _ = line.split(accent, 1)
+                draw.text((90 + draw.textlength(prefix, font=theme_face), origin_y), accent, font=theme_face,
+                          fill='#772432', stroke_width=6, stroke_fill='#fff7e6')
+            title_y += bounds[3] - bounds[1] + line_gap
         word = str(m.get('word_of_day') or '')
         badges = []
         if word:
@@ -247,13 +320,17 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
     text(backstage_text, (332, 3100 + delta, 2515, 3174 + footer_shift), 47)
     checks = {}
     for name, box, dest in [('right', (1877, 1050, 2548, 3070), (1877, 1050, 2548, 3070)),
-                             ('bottom', (0, 3195, 2600, 3700), (0, 3195 + footer_shift, 2600, 3700 + footer_shift))]:
+                             ('bottom', (0, 3195, 2600, base_height), (0, 3195 + footer_shift, 2600, base_height + footer_shift))]:
         checks[name] = ImageChops.difference(source.crop(box), image.crop(dest)).getbbox() is None
     if not all(checks.values()):
         raise ValueError('固定区域像素发生变化：' + str(checks))
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     image.save(out / 'agenda.png')
+    number = str(result['meeting']['number'])
+    image.save(out / f'SAL会单第{number}期.png')
+    if hero:
+        Image.open(hero).convert('RGB').save(out / f'SAL会单主图第{number}期.png', format='PNG')
     result.update(canvas=list(image.size), fixed_pixels=checks, font=fontfile, brand_font=brand_font,
                   title_font=title_font, flow_font_px=52, extension_px=footer_shift, highlight=highlight)
     (out / 'agenda.render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
@@ -270,6 +347,7 @@ def main():
     parser.add_argument('--brand-font')
     parser.add_argument('--title-font')
     parser.add_argument('--highlight', default='')
+    parser.add_argument('--title-accent', default='', help='主题标题中使用头马酒红强调的关键词')
     parser.add_argument('--confirmed-sha256')
     args = parser.parse_args()
     try:
@@ -281,7 +359,8 @@ def main():
         else:
             if args.confirmed_sha256 != digest:
                 raise ValueError('确认编号与事实文件不一致，请先确认当前文字稿')
-            result = render(data, args.hero, args.output_dir, args.font, args.brand_font, args.title_font, args.highlight)
+            result = render(data, args.hero, args.output_dir, args.font, args.brand_font, args.title_font, args.highlight,
+                            title_accent=args.title_accent)
         print(json.dumps({'ok': True, 'facts_sha256': digest, 'result': result}, ensure_ascii=False, indent=2))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(json.dumps({'ok': False, 'error': str(exc)}, ensure_ascii=False), file=sys.stderr)

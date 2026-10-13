@@ -2445,6 +2445,8 @@ def build_agenda(
                 "end",
                 "location",
                 "theme",
+                "title_lines",
+                "title_accent",
                 "word_of_day",
                 "manager",
                 "president",

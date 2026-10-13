@@ -26,6 +26,7 @@ def small_facts(long=False):
         rows[1]['details'] = ['练习：' + '用一个具体的故事说明自己的想法。' * 8] * 3
     return {'schema_version': 3, 'club': {'name': 'Super AI Lab'},
             'meeting': {'number': '测试', 'theme': '从第一次表达走向更自信的自己' if long else '沟通与合作',
+                        'title_lines': ['从第一次表达', '走向更自信的自己'] if long else ['沟通与合作'],
                         'date': '2026-09-14', 'start': '19:30', 'end': '20:40', 'location': '程序测试会议室', 'word_of_day': '练习', 'manager': '测试甲'},
             'timeline': rows, 'backstage': [],
             'computed': {'status': 'exact', 'total_minutes': 70, 'approved_overtime_minutes': 0, 'final_end': '20:40', 'duration_confirmation_required': False}}
@@ -34,9 +35,12 @@ def small_facts(long=False):
 class ShuwenTests(unittest.TestCase):
     def test_default_timing_matches_accepted_meeting(self):
         data = json.loads((ROOT / 'examples/shuwen-meeting.fixture.json').read_text())
+        data['meeting'].update(theme='用一个小爱好，滋养自己', title_lines=['用一个小爱好，', '滋养自己'], title_accent='小爱好')
         before = deepcopy(data)
         computed = confirm_shuwen.prepare(data, ROOT, allow_pending=True)
         self.assertEqual(data, before)
+        self.assertEqual(template.semantic_title(computed['meeting']), '用一个小爱好，\n滋养自己')
+        self.assertEqual(computed['meeting']['title_accent'], '小爱好')
         rows = {r['id']: r for r in computed['timeline']}
         self.assertEqual(rows['president_opening']['start'], '19:32')
         self.assertEqual(rows['toastmaster_opening']['start'], '19:35')
@@ -81,8 +85,8 @@ class ShuwenTests(unittest.TestCase):
             Image.new('RGB', (2600, 932), '#fff7e6').save(hero)
             short = template.render(small_facts(), hero, path / 'short')
             long = template.render(small_facts(long=True), hero, path / 'long')
-            self.assertEqual(short['canvas'], [2600, 3700])
-            self.assertGreater(long['canvas'][1], 3700)
+            self.assertEqual(short['canvas'], [2600, 3719])
+            self.assertGreater(long['canvas'][1], 3719)
             for result in (short, long):
                 self.assertEqual(result['fixed_pixels'], {'right': True, 'bottom': True})
                 self.assertEqual(result['flow_font_px'], 52)
@@ -120,7 +124,7 @@ class ShuwenTests(unittest.TestCase):
                                      '--output-dir', str(path / 'out')], cwd=path, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             with Image.open(path / 'out/agenda.png') as output:
-                self.assertEqual(output.size, (2600, 3700))
+                self.assertEqual(output.size, (2600, 3719))
 
     def test_real_engine_confirmation_to_render(self):
         with tempfile.TemporaryDirectory() as folder:

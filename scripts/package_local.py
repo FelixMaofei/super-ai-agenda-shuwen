@@ -19,6 +19,7 @@ MANIFEST_NAME = "SHA256SUMS"
 
 RUNTIME_FILES = (
     "SKILL.md",
+    "FONT-LICENSE.md",
     "agents/openai.yaml",
     "assets/agenda.css",
     "assets/toastmasters-logo.png",
