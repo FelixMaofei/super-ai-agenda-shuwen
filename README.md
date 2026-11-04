@@ -23,13 +23,13 @@ python3 -m unittest discover -s tests -p 'test_shuwen.py'
 python3 scripts/package_local.py --output-dir /tmp/shuwen-package-check
 ```
 
-仓库与打包文件含模板中的俱乐部资料和二维码，当前按私有仓库管理。Python 需要 Pillow 与中文字体；可通过命令参数指定字体。
+仓库与打包文件含模板中的俱乐部资料和二维码，仓库已公开。Python 需要 Pillow 与中文字体；可通过命令参数指定字体。
 
 ## GitHub 仓库
 
-独立仓库：<https://github.com/FelixMaofei/super-ai-agenda-shuwen>（私有）。
+独立仓库：<https://github.com/FelixMaofei/super-ai-agenda-shuwen>（公开）。
 
-拥有仓库访问权限后，可克隆到本机 Skill 目录：
+克隆到本机 Skill 目录，以后在该目录运行 `git pull` 即可更新：
 
 ```bash
 git clone https://github.com/FelixMaofei/super-ai-agenda-shuwen.git ~/.agents/skills/super-ai-agenda-shuwen
