@@ -46,6 +46,28 @@ def semantic_title(meeting):
     return '\n'.join(lines)
 
 
+BODY_FACE_INDEX = {}
+
+
+def find_body_face(path, families, style):
+    path = Path(path)
+    if not path.is_file():
+        return None
+    for index in range(40 if path.suffix.lower() in ('.ttc', '.otc') else 1):
+        try:
+            family, weight = ImageFont.truetype(str(path), 52, index=index).getname()
+        except OSError:
+            break
+        if family.lower() in families and weight.lower() == style:
+            BODY_FACE_INDEX[str(path)] = index
+            return str(path)
+    return None
+
+
+def body_font(path, size):
+    return ImageFont.truetype(path, size, index=BODY_FACE_INDEX.get(str(path), 0))
+
+
 def resolve_font(given=None, *, bold=False):
     if given:
         path = Path(given).expanduser()
@@ -54,6 +76,24 @@ def resolve_font(given=None, *, bold=False):
         return str(path)
     home_fonts = Path.home() / 'Library/Fonts'
     windows_fonts = Path(os.environ.get('WINDIR', 'C:' + os.sep + 'Windows')) / 'Fonts'
+    if not bold:
+        pingfang = [home_fonts / 'PingFang SC Regular.ttf', home_fonts / 'PingFang.ttc',
+                    Path('/System/Library/Fonts/PingFang.ttc'), Path('/System/Library/Fonts/苹方.ttc')]
+        pingfang += sorted(Path('/System/Library/AssetsV2/com_apple_MobileAsset_Font8').glob('*/AssetData/PingFang.ttc'))
+        source_han = [home_fonts / name for name in ('思源黑体 CN Medium.otf', 'SourceHanSansCN-Medium.otf', 'SourceHanSansSC-Medium.otf', 'NotoSansCJK-Medium-5.otf')]
+        source_han += [windows_fonts / 'SourceHanSansSC-Medium.otf', Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Medium.ttc')]
+        yahei = [home_fonts / '微软雅黑.ttc', home_fonts / 'msyh.ttc', windows_fonts / 'msyh.ttc']
+        yahei += sorted(Path('/Applications').glob('Microsoft *.app/Contents/Resources/DFonts/msyh.ttc'))
+        for candidates, families, style in [
+            (pingfang, ('pingfang sc',), 'regular'),
+            (source_han, ('source han sans cn', 'source han sans sc', 'noto sans cjk sc'), 'medium'),
+            (yahei, ('microsoft yahei',), 'regular'),
+        ]:
+            for path in candidates:
+                selected = find_body_face(path, families, style)
+                if selected:
+                    return selected
+        raise ValueError('缺少默认正文字体：请安装苹方 Regular、思源黑体 Medium 或微软雅黑 Regular，或用 --font 指定字体')
     choices = [
         home_fonts / ('msyhbd_0.ttc' if bold else 'msyh.ttc'),
         windows_fonts / ('msyhbd.ttc' if bold else 'msyh.ttc'),
@@ -65,6 +105,53 @@ def resolve_font(given=None, *, bold=False):
         if path.is_file():
             return str(path)
     raise ValueError('缺少中文字体；请通过 --font 指定中文 TTF/TTC/OTF 文件')
+
+
+BRAND_FACE_INDEX = {}
+
+
+def find_bold_face(path):
+    """Pick a real Bold/Heavy face; TTC files may hold several weights and regions."""
+    path = Path(path)
+    if not path.is_file():
+        return None
+    for index in range(40 if path.suffix.lower() in ('.ttc', '.otc') else 1):
+        try:
+            family, style = ImageFont.truetype(str(path), 74, index=index).getname()
+        except OSError:
+            break
+        if family.startswith('.') or any(region in family for region in (' HK', ' TC', ' MO', ' JP', ' KR')):
+            continue
+        if any(weight in style.lower() for weight in ('bold', 'heavy', 'black', '粗', 'w6', 'w7', 'w8', 'w9')):
+            BRAND_FACE_INDEX[str(path)] = index
+            return str(path)
+    return None
+
+
+def brand_face(path, size):
+    return ImageFont.truetype(path, size, index=BRAND_FACE_INDEX.get(str(path), 0))
+
+
+def resolve_brand_bold(given=None):
+    """Brand and issue never inherit the regular body font."""
+    if given:
+        selected = find_bold_face(Path(given).expanduser())
+        if not selected:
+            raise ValueError('--brand-font 须为中文 Bold/Heavy 字体：' + str(given))
+        return selected
+    home = Path.home() / 'Library/Fonts'
+    win = Path(os.environ.get('WINDIR', 'C:' + os.sep + 'Windows')) / 'Fonts'
+    candidates = [home / 'msyhbd_0.ttc', home / 'msyhbd.ttc', win / 'msyhbd.ttc']
+    candidates += sorted(Path('/Applications').glob('Microsoft *.app/Contents/Resources/DFonts/msyhbd.ttc'))
+    candidates += [home / 'PingFang SC Bold.ttf', Path('/System/Library/Fonts/PingFang.ttc')]
+    candidates += sorted(Path('/System/Library/AssetsV2/com_apple_MobileAsset_Font8').glob('*/AssetData/PingFang.ttc'))
+    candidates += [Path('/System/Library/Fonts/Hiragino Sans GB.ttc'), home / 'NotoSansCJK-Black-7.otf',
+                   Path('/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc')]
+    for path in candidates:
+        selected = find_bold_face(path)
+        if selected:
+            return selected
+    raise ValueError('顶部名称和期数必须使用粗体字体，请安装微软雅黑 Bold 或通过 --brand-font 指定中文 Bold/Heavy 字体')
 
 
 def facts(data):
@@ -130,9 +217,16 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
     source = Image.open(SOURCE).convert('RGB')
     if source.width != 2600 or source.height < 3700:
         raise ValueError('完整模板宽度须为 2600px，且高度至少为 3700px')
-    base_height = source.height
+    def asset(name, width):
+        original = Image.open(ROOT / 'assets/complete' / name).convert('RGB')
+        return original.resize((width, round(original.height * width / original.width)), Image.Resampling.LANCZOS)
+
+    right_asset = asset('source-r.jpg', 723)
+    bottom_asset = asset('source-b.jpg', 2600)
+    backstage_asset = asset('muhou.jpg', 260)
+    base_height = 3195 + bottom_asset.height
     fontfile = resolve_font(fontfile)
-    brand_font = resolve_font(brand_font or fontfile, bold=True)
+    brand_font = resolve_brand_bold(brand_font)
     if not title_font:
         display_candidate = Path.home() / 'Library/Fonts/Alimama_ShuHeiTi_Bold.ttf'
         heavy_candidates = [
@@ -143,7 +237,7 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
         heavy_fallback = next((path for path in heavy_candidates if path.is_file()), None)
         title_font = str(display_candidate) if display_candidate.is_file() else (str(heavy_fallback) if heavy_fallback else brand_font)
     title_font = resolve_font(title_font, bold=True)
-    body = ImageFont.truetype(fontfile, 52)
+    body = body_font(fontfile, 52)
     measure = ImageDraw.Draw(source)
 
     def wrap(value, width, font=body):
@@ -182,18 +276,23 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
         backstage.append('会议经理：' + str(manager))
     for item in result['backstage']:
         backstage.append(str(item.get('label') or item.get('id') or '幕后') + '：' + str(item.get('person') or '待定'))
-    backstage_font = ImageFont.truetype(fontfile, 47)
-    backstage_text = wrap(' ｜ '.join(backstage) or '待定', 2175, backstage_font)
-    backstage_extra = max(0, text_height(backstage_text, backstage_font) + 24 - 74)
+    backstage_font = body_font(fontfile, 47)
+    backstage_text = wrap(' ｜ '.join(backstage) or '待定', 2155, backstage_font)
+    backstage_height = max(85, backstage_asset.height + 28, text_height(backstage_text, backstage_font) + 28)
+    backstage_extra = backstage_height - 85
     footer_shift = delta + backstage_extra
     image = Image.new('RGB', (2600, base_height + footer_shift), NAVY)
-    image.paste(source.crop((0, 0, 2600, 3095)), (0, 0))
-    image.paste(source.crop((0, 3095, 2600, 3195)), (0, 3095 + delta))
-    image.paste(source.crop((0, 3195, 2600, base_height)), (0, 3195 + footer_shift))
+    image.paste(source.crop((0, 0, 2600, 1046)), (0, 0))
+    right_position = (1859, 1034)
+    bottom_position = (0, 3195 + footer_shift)
+    image.paste(right_asset, right_position)
+    image.paste(bottom_asset, bottom_position)
     draw = ImageDraw.Draw(image)
 
+    # Independent assets contain no old backstage edge or QR separator.
+
     def text(value, box, size=52, fill='#111111', center=False, bold=False, typeface=None):
-        font = ImageFont.truetype(typeface or fontfile, size)
+        font = ImageFont.truetype(typeface, size) if typeface else body_font(fontfile, size)
         stroke = 1 if bold else 0
         bounds = draw.multiline_textbbox((0, 0), value, font=font, spacing=10, stroke_width=stroke)
         width, height = bounds[2] - bounds[0], bounds[3] - bounds[1]
@@ -212,8 +311,8 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
         logo = Image.open(ROOT / 'assets/v009/logo.png').convert('RGBA')
         logo.thumbnail((300, 248))
         image.paste(logo, (66, 300-logo.height), logo)
-        headline_font = ImageFont.truetype(brand_font, 100)
-        cn_font = ImageFont.truetype(brand_font, 77)
+        headline_font = brand_face(brand_font, 100)
+        cn_font = brand_face(brand_font, 77)
         brand_x, baseline = 420, 180
         english = str(m.get('club_heading', 'Super AI Lab'))
         chinese = str(m.get('club_subheading', '头马俱乐部'))
@@ -225,22 +324,22 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
         chinese_y = baseline-cn_box[3]
         draw.text((brand_x+draw.textlength(english, font=headline_font), chinese_y), chinese, font=cn_font, fill=NAVY)
         issue = '第' + str(m['number']) + '期例会'
-        issue_font = ImageFont.truetype(brand_font, 74)
+        issue_font = brand_face(brand_font, 74)
         issue_box = draw.textbbox((0, 0), issue, font=issue_font)
         draw.text((brand_x, 300-issue_box[3]), issue, font=issue_font, fill='#772432')
         theme = semantic_title(m)
         visible_theme = ''.join(theme.split())
         is_short_single = len(visible_theme) <= 7 and '\n' not in theme
         theme_size = 224 if is_short_single else (166 if '\n' in theme else 204)
-        theme_face = ImageFont.truetype(title_font, theme_size)
+        theme_face = brand_face(title_font, theme_size)
         theme_width = draw.textbbox((0, 0), theme.replace('\n', ''), font=theme_face, stroke_width=6)[2]
         if is_short_single and theme_width > 1685:
             theme_size = max(204, int(theme_size * 1685 / theme_width))
-            theme_face = ImageFont.truetype(title_font, theme_size)
+            theme_face = brand_face(title_font, theme_size)
             theme_width = draw.textbbox((0, 0), theme, font=theme_face, stroke_width=6)[2]
         if theme_width > 1685 or '\n' in theme:
             theme_size = 166
-            theme_face = ImageFont.truetype(title_font, theme_size)
+            theme_face = brand_face(title_font, theme_size)
             if '\n' not in theme:
                 theme = wrap(theme, 1685, theme_face)
         lines = theme.split('\n')
@@ -312,16 +411,15 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
             row_y = row_end
         draw.rounded_rectangle((54, top, 1850, bottom), 28, outline='#b6d9e3', width=3)
         y = bottom + 13
-    # Extend the backstage card when names wrap; keep the footer itself pixel-identical.
-    if backstage_extra:
-        draw.rounded_rectangle((54, 3095 + delta, 2547, 3180 + footer_shift), 28, fill='white')
-        image.paste(source.crop((54, 3095, 330, 3180)), (54, 3095 + delta))
-    draw.rectangle((330, 3100 + delta, 2515, 3174 + footer_shift), fill='white')
-    text(backstage_text, (332, 3100 + delta, 2515, 3174 + footer_shift), 47)
+    backstage_top = 3095 + delta
+    backstage_bottom = backstage_top + backstage_height
+    draw.rounded_rectangle((54, backstage_top, 2547, backstage_bottom), 28, fill='white')
+    backstage_icon_y = backstage_top + (backstage_height - backstage_asset.height) // 2
+    image.paste(backstage_asset, (72, backstage_icon_y))
+    text(backstage_text, (352, backstage_top + 14, 2515, backstage_bottom - 14), 47)
     checks = {}
-    for name, box, dest in [('right', (1877, 1050, 2548, 3070), (1877, 1050, 2548, 3070)),
-                             ('bottom', (0, 3195, 2600, base_height), (0, 3195 + footer_shift, 2600, base_height + footer_shift))]:
-        checks[name] = ImageChops.difference(source.crop(box), image.crop(dest)).getbbox() is None
+    for name, fixed, (x, y) in [('right', right_asset, right_position), ('bottom', bottom_asset, bottom_position)]:
+        checks[name] = ImageChops.difference(fixed, image.crop((x, y, x + fixed.width, y + fixed.height))).getbbox() is None
     if not all(checks.values()):
         raise ValueError('固定区域像素发生变化：' + str(checks))
     out = Path(out)
@@ -332,7 +430,11 @@ def render(data, hero, out, fontfile=None, brand_font=None, title_font=None, hig
     if hero:
         Image.open(hero).convert('RGB').save(out / f'SAL会单主图第{number}期.png', format='PNG')
     result.update(canvas=list(image.size), fixed_pixels=checks, font=fontfile, brand_font=brand_font,
-                  title_font=title_font, flow_font_px=52, extension_px=footer_shift, highlight=highlight)
+                  title_font=title_font, flow_font_px=52, extension_px=footer_shift, highlight=highlight,
+                  body_font_name=body.getname(), body_font_index=BODY_FACE_INDEX.get(fontfile, 0),
+                  brand_font_index=BRAND_FACE_INDEX.get(brand_font, 0),
+                  backstage_icon_margins=[backstage_icon_y-backstage_top, backstage_bottom-backstage_icon_y-backstage_asset.height],
+                  fixed_assets=['source-r.jpg', 'source-b.jpg', 'muhou.jpg'])
     (out / 'agenda.render.json').write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     return result
 

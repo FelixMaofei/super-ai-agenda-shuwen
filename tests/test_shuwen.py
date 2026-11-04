@@ -85,11 +85,13 @@ class ShuwenTests(unittest.TestCase):
             Image.new('RGB', (2600, 932), '#fff7e6').save(hero)
             short = template.render(small_facts(), hero, path / 'short')
             long = template.render(small_facts(long=True), hero, path / 'long')
-            self.assertEqual(short['canvas'], [2600, 3719])
-            self.assertGreater(long['canvas'][1], 3719)
+            self.assertEqual(short['canvas'][0], 2600)
+            self.assertGreater(long['canvas'][1], short['canvas'][1])
             for result in (short, long):
                 self.assertEqual(result['fixed_pixels'], {'right': True, 'bottom': True})
                 self.assertEqual(result['flow_font_px'], 52)
+                top, bottom = result['backstage_icon_margins']
+                self.assertLessEqual(abs(top - bottom), 1)
 
     def test_empty_phase_is_allowed(self):
         data = small_facts()
@@ -113,7 +115,8 @@ class ShuwenTests(unittest.TestCase):
             path = Path(folder)
             package, archive = package_local.build_package(path / 'package')
             self.assertTrue(archive.is_file())
-            for name in ('scripts/complete_template.py', 'scripts/editable_agenda.py', 'assets/complete/source.jpg', 'references/complete-template.md'):
+            for name in ('scripts/complete_template.py', 'scripts/editable_agenda.py', 'assets/complete/source.jpg', 'assets/complete/source-r.jpg',
+                         'assets/complete/source-b.jpg', 'assets/complete/muhou.jpg', 'references/complete-template.md'):
                 self.assertTrue((package / name).is_file(), name)
             source = path / 'facts.json'
             source.write_text(json.dumps(small_facts(), ensure_ascii=False))
@@ -123,8 +126,9 @@ class ShuwenTests(unittest.TestCase):
                                      '--hero', str(hero), '--confirmed-sha256', hashlib.sha256(source.read_bytes()).hexdigest(),
                                      '--output-dir', str(path / 'out')], cwd=path, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+            rendered = json.loads((path / 'out/agenda.render.json').read_text())
             with Image.open(path / 'out/agenda.png') as output:
-                self.assertEqual(output.size, (2600, 3719))
+                self.assertEqual(list(output.size), rendered['canvas'])
 
     def test_real_engine_confirmation_to_render(self):
         with tempfile.TemporaryDirectory() as folder:
